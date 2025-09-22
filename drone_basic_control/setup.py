@@ -13,7 +13,7 @@ setup(
         ('share/ament_index/resource_index/packages', ['resource/' + package_name]),
         # package.xml
         ('share/' + package_name, ['package.xml']),
-        # install launch files into share/<package>/launch
+        # Install launch files into share/<package>/launch
         (os.path.join('share', package_name, 'launch'), glob(os.path.join('launch', '*.launch.py'))),
     ],
     install_requires=['setuptools'],
@@ -25,7 +25,7 @@ setup(
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [
-            # Make sure these module names match your *.py filenames
+            # These must match your Python filenames and include a main() in each
             'hb_node = drone_basic_control.heartbeat_node:main',
             'arming_node = drone_basic_control.arming_node:main',
             'takeoff_node = drone_basic_control.takeoff_node:main',
