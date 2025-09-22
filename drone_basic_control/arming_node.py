@@ -1,13 +1,14 @@
 import rclpy
 from rclpy.lifecycle import LifecycleNode, LifecycleState, TransitionCallbackReturn
 from rclpy.qos import QoSProfile, ReliabilityPolicy, HistoryPolicy, DurabilityPolicy
-from px4_msgs.msg import VehicleCommand, VehicleStatus
+from px4_msgs.msg import VehicleCommand, VehicleStatus, OffboardControlMode
 
 
 class ArmingNode(LifecycleNode):
     """
-    Drives PX4 into OFFBOARD (DO_SET_MODE 1/6) then sends ARM once OFFBOARD is reported.
-    Heartbeat and TrajectorySetpoint are handled by other nodes.
+    Waits until OffboardControlMode has been streaming for >=1s, then:
+      1) sets OFFBOARD (DO_SET_MODE, main=1 custom, sub=6),
+      2) sends ARM.
     """
     def __init__(self, drone_ns: str = "drone_1", px4_ns: str = "px4_1"):
         super().__init__(f'{drone_ns}_arming_node')
@@ -21,6 +22,8 @@ class ArmingNode(LifecycleNode):
         self.vehicle_status = VehicleStatus()
         self.timer_ = None
         self._armed_sent = False
+        self._offboard_seen = False
+        self._offboard_started_ns = None
 
     def on_configure(self, state: LifecycleState):
         qos = QoSProfile(
@@ -35,14 +38,22 @@ class ArmingNode(LifecycleNode):
         self.vehicle_status_sub = self.create_subscription(
             VehicleStatus, f'/{self.px4_ns}/fmu/out/vehicle_status', self.vehicle_status_cb, qos
         )
-        self.timer_ = self.create_timer(0.2, self.timer_cb)  # 5 Hz
+        # Observe OffboardControlMode to know hb stream is present
+        self.offboard_sub = self.create_subscription(
+            OffboardControlMode, f'/{self.px4_ns}/fmu/in/offboard_control_mode', self.offboard_cb, qos
+        )
+        self.timer_ = self.create_timer(0.1, self.timer_cb)  # 10 Hz state machine
         self.timer_.cancel()
         self._armed_sent = False
+        self._offboard_seen = False
+        self._offboard_started_ns = None
         return TransitionCallbackReturn.SUCCESS
 
     def on_activate(self, state: LifecycleState):
         self.get_logger().info(f'[{self.drone_ns}] ArmingNode activated')
         self._armed_sent = False
+        self._offboard_seen = False
+        self._offboard_started_ns = None
         self.timer_.reset()
         return super().on_activate(state)
 
@@ -65,8 +76,18 @@ class ArmingNode(LifecycleNode):
             self.destroy_timer(self.timer_)
         return TransitionCallbackReturn.SUCCESS
 
+    # -- Callbacks ------------------------------------------------------------
+
     def vehicle_status_cb(self, msg: VehicleStatus):
         self.vehicle_status = msg
+
+    def offboard_cb(self, _msg: OffboardControlMode):
+        # mark stream as present; start a "warm-up" stopwatch at first sight
+        if not self._offboard_seen:
+            self._offboard_seen = True
+            self._offboard_started_ns = self.get_clock().now().nanoseconds
+
+    # -- Helpers --------------------------------------------------------------
 
     def _send_cmd(self, command, **params):
         msg = VehicleCommand()
@@ -86,15 +107,25 @@ class ArmingNode(LifecycleNode):
         msg.timestamp = int(self.get_clock().now().nanoseconds / 1000)
         self.vehicle_command_publisher.publish(msg)
 
+    # -- State machine --------------------------------------------------------
+
     def timer_cb(self):
-        nav_state = self.vehicle_status.nav_state
-        if nav_state != VehicleStatus.NAVIGATION_STATE_OFFBOARD:
-            # Main mode 1, submode 6 (OFFBOARD)
+        # wait until OffboardControlMode stream has been seen for >= 1.0 s
+        if not self._offboard_seen or self._offboard_started_ns is None:
+            return
+        elapsed = (self.get_clock().now().nanoseconds - self._offboard_started_ns) / 1e9
+        if elapsed < 1.0:
+            return
+
+        # 1) set mode: main=1(custom), sub=6(OFFBOARD)
+        if self.vehicle_status.nav_state != VehicleStatus.NAVIGATION_STATE_OFFBOARD:
             self._send_cmd(VehicleCommand.VEHICLE_CMD_DO_SET_MODE, param1=1.0, param2=6.0)
             return
+
+        # 2) arm once OFFBOARD is reported
         if not self._armed_sent:
             self._send_cmd(VehicleCommand.VEHICLE_CMD_COMPONENT_ARM_DISARM, param1=1.0)
-            self.get_logger().info(f'[{self.drone_ns}] Arm command sent (OFFBOARD confirmed)')
+            self.get_logger().info(f'[{self.drone_ns}] Arm command sent (OFFBOARD confirmed after warm-up)')
             self._armed_sent = True
             self.timer_.cancel()
 
