@@ -5,10 +5,7 @@ from px4_msgs.msg import VehicleCommand, VehicleStatus
 
 
 class LandingNode(LifecycleNode):
-    """
-    When activated, periodically issues NAV_LAND.
-    """
-
+    """When activated, periodically issues NAV_LAND."""
     def __init__(self, drone_ns: str = "drone_1", px4_ns: str = "px4_1"):
         super().__init__(f'{drone_ns}_landing_node')
         self.declare_parameter("drone_ns", drone_ns)
@@ -85,3 +82,18 @@ class LandingNode(LifecycleNode):
 
     def timer_cb(self):
         self._send_cmd(VehicleCommand.VEHICLE_CMD_NAV_LAND)
+
+
+def main(args=None):
+    rclpy.init(args=args)
+    node = LandingNode()
+    try:
+        rclpy.spin(node)
+    except KeyboardInterrupt:
+        pass
+    node.destroy_node()
+    rclpy.shutdown()
+
+
+if __name__ == "__main__":
+    main()
