@@ -13,7 +13,6 @@ class TakeOffNode(LifecycleNode):
     Setpoints default to (0,0,takeoff_height) and can be updated via
     /{drone_ns}/flight_control/update_pos (Float32MultiArray [x,y,z]).
     """
-
     def __init__(self, drone_ns: str = "drone_1", px4_ns: str = "px4_1", takeoff_height: float = -3.0):
         super().__init__(f'{drone_ns}_takeoff_node')
         self.declare_parameter("drone_ns", drone_ns)
@@ -128,3 +127,18 @@ class TakeOffNode(LifecycleNode):
     def timer_cb(self):
         # ALWAYS stream setpoints so PX4 will enter OFFBOARD
         self._publish_ts(self.x, self.y, self.z)
+
+
+def main(args=None):
+    rclpy.init(args=args)
+    node = TakeOffNode()
+    try:
+        rclpy.spin(node)
+    except KeyboardInterrupt:
+        pass
+    node.destroy_node()
+    rclpy.shutdown()
+
+
+if __name__ == "__main__":
+    main()
