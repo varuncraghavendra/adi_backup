@@ -6,22 +6,17 @@ from px4_msgs.msg import VehicleCommand, VehicleStatus
 
 class ArmingNode(LifecycleNode):
     """
-    Drives PX4 into OFFBOARD (by repeatedly sending DO_SET_MODE 1/6),
-    then sends ARM once OFFBOARD is reported.
-    Heartbeat (OffboardControlMode) and TrajectorySetpoint streams
-    are handled by other nodes.
+    Drives PX4 into OFFBOARD (DO_SET_MODE 1/6) then sends ARM once OFFBOARD is reported.
+    Heartbeat and TrajectorySetpoint are handled by other nodes.
     """
-
     def __init__(self, drone_ns: str = "drone_1", px4_ns: str = "px4_1"):
         super().__init__(f'{drone_ns}_arming_node')
         self.declare_parameter("drone_ns", drone_ns)
         self.declare_parameter("px4_ns", px4_ns)
-
         self.drone_ns = self.get_parameter("drone_ns").get_parameter_value().string_value
         self.px4_ns = self.get_parameter("px4_ns").get_parameter_value().string_value
 
         self.get_logger().info(f'[{self.drone_ns}] ArmingNode init for PX4 ns: {self.px4_ns}')
-
         self.vehicle_command_publisher = None
         self.vehicle_status = VehicleStatus()
         self.timer_ = None
@@ -93,16 +88,27 @@ class ArmingNode(LifecycleNode):
 
     def timer_cb(self):
         nav_state = self.vehicle_status.nav_state
-        # PX4 OFFBOARD is 14; print what we see:
-        self.get_logger().debug(f'[{self.drone_ns}] nav_state={nav_state}')
-
         if nav_state != VehicleStatus.NAVIGATION_STATE_OFFBOARD:
             # Main mode 1, submode 6 (OFFBOARD)
             self._send_cmd(VehicleCommand.VEHICLE_CMD_DO_SET_MODE, param1=1.0, param2=6.0)
             return
-
         if not self._armed_sent:
             self._send_cmd(VehicleCommand.VEHICLE_CMD_COMPONENT_ARM_DISARM, param1=1.0)
             self.get_logger().info(f'[{self.drone_ns}] Arm command sent (OFFBOARD confirmed)')
             self._armed_sent = True
             self.timer_.cancel()
+
+
+def main(args=None):
+    rclpy.init(args=args)
+    node = ArmingNode()
+    try:
+        rclpy.spin(node)
+    except KeyboardInterrupt:
+        pass
+    node.destroy_node()
+    rclpy.shutdown()
+
+
+if __name__ == "__main__":
+    main()
