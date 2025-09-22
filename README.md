@@ -53,3 +53,8 @@ New Errors
 [lifecycle_manager-6] [INFO] [1758526008.546105642] [unified_lifecycle_manager]: Waiting for service drone_2/drone_bt_navigator/get_state...
 [lifecycle_manager-5] [INFO] [1758526008.564798319] [unified_lifecycle_manager]: Waiting for service drone_1/drone_bt_navigator/get_s
 
+New issue 
+file 'launch_all_nodes.launch.py' was found more than once in the share directory of package 'drone_basic_control': ['/home/ros2_ws/install/drone_basic_control/share/drone_basic_control/launch_all_nodes.launch.py', '/home/ros2_ws/install/drone_basic_control/share/drone_basic_control/launch/launch_all_nodes.launch.py']
+
+
+
