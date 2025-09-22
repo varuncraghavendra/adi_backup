@@ -5,11 +5,7 @@ from px4_msgs.msg import OffboardControlMode
 
 
 class HeartBeatNode(LifecycleNode):
-    """
-    Streams OffboardControlMode at 10 Hz.
-    PX4 requires this heartbeat while in OFFBOARD.
-    """
-
+    """Streams OffboardControlMode at 10 Hz."""
     def __init__(self, drone_ns: str = "drone_1", px4_ns: str = "px4_1"):
         super().__init__(f'{drone_ns}_hb_node')
         self.declare_parameter("drone_ns", drone_ns)
@@ -68,3 +64,18 @@ class HeartBeatNode(LifecycleNode):
         msg.body_rate = False
         msg.timestamp = int(self.get_clock().now().nanoseconds / 1000)
         self.pub.publish(msg)
+
+
+def main(args=None):
+    rclpy.init(args=args)
+    node = HeartBeatNode()
+    try:
+        rclpy.spin(node)
+    except KeyboardInterrupt:
+        pass
+    node.destroy_node()
+    rclpy.shutdown()
+
+
+if __name__ == "__main__":
+    main()
