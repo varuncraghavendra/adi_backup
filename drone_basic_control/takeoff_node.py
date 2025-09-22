@@ -1,13 +1,19 @@
 import rclpy
 from rclpy.lifecycle import LifecycleNode, LifecycleState, TransitionCallbackReturn
 from rclpy.qos import QoSProfile, ReliabilityPolicy, HistoryPolicy, DurabilityPolicy
-from px4_msgs.msg import OffboardControlMode, TrajectorySetpoint, VehicleLocalPosition, VehicleStatus
+from px4_msgs.msg import TrajectorySetpoint, VehicleLocalPosition, VehicleStatus
 from std_msgs.msg import Float32MultiArray
 import json
 import fcntl
 
 
 class TakeOffNode(LifecycleNode):
+    """
+    Streams TrajectorySetpoint continuously (even before OFFBOARD) so PX4 accepts OFFBOARD.
+    Setpoints default to (0,0,takeoff_height) and can be updated via
+    /{drone_ns}/flight_control/update_pos (Float32MultiArray [x,y,z]).
+    """
+
     def __init__(self, drone_ns: str = "drone_1", px4_ns: str = "px4_1", takeoff_height: float = -3.0):
         super().__init__(f'{drone_ns}_takeoff_node')
         self.declare_parameter("drone_ns", drone_ns)
@@ -23,105 +29,102 @@ class TakeOffNode(LifecycleNode):
         self.y = 0.0
         self.z = self.takeoff_height
 
-        self.trajectory_setpoint_publisher = None
+        self.ts_pub = None
         self.vehicle_status = VehicleStatus()
         self.vehicle_local_position = VehicleLocalPosition()
         self.timer_ = None
 
     def on_configure(self, state: LifecycleState):
-        self.get_logger().info("on_configure")
-
-        qos_profile = QoSProfile(
+        qos = QoSProfile(
             reliability=ReliabilityPolicy.BEST_EFFORT,
             durability=DurabilityPolicy.TRANSIENT_LOCAL,
             history=HistoryPolicy.KEEP_LAST,
-            depth=1
+            depth=1,
         )
-
-        self.trajectory_setpoint_publisher = self.create_publisher(
-            TrajectorySetpoint, f'/{self.px4_ns}/fmu/in/trajectory_setpoint', qos_profile
+        self.ts_pub = self.create_publisher(
+            TrajectorySetpoint, f'/{self.px4_ns}/fmu/in/trajectory_setpoint', qos
         )
-        self.vehicle_status_subscriber = self.create_subscription(
-            VehicleStatus, f'/{self.px4_ns}/fmu/out/vehicle_status', self.vehicle_status_callback, qos_profile
+        self.status_sub = self.create_subscription(
+            VehicleStatus, f'/{self.px4_ns}/fmu/out/vehicle_status', self.status_cb, qos
         )
-        self.vehicle_local_position_subscriber = self.create_subscription(
-            VehicleLocalPosition, f'/{self.px4_ns}/fmu/out/vehicle_local_position',
-            self.vehicle_local_position_callback, qos_profile
+        self.lpos_sub = self.create_subscription(
+            VehicleLocalPosition, f'/{self.px4_ns}/fmu/out/vehicle_local_position', self.lpos_cb, qos
         )
-        # subscribe to this drone's setpoint update channel
-        self.vehicle_command_sub = self.create_subscription(
-            Float32MultiArray, f'/{self.drone_ns}/flight_control/update_pos', self.vehicle_cmd_callback, 10
+        self.cmd_sub = self.create_subscription(
+            Float32MultiArray, f'/{self.drone_ns}/flight_control/update_pos', self.cmd_cb, 10
         )
-
-        self.timer_ = self.create_timer(0.1, self.timer_callback)
+        self.timer_ = self.create_timer(0.1, self.timer_cb)  # 10 Hz stream
         self.timer_.cancel()
-
-        return TransitionCallbackReturn.SUCCESS
-
-    def on_cleanup(self, state: LifecycleState):
-        self.get_logger().info('on_cleanup')
-        if self.trajectory_setpoint_publisher is not None:
-            self.destroy_publisher(self.trajectory_setpoint_publisher)
-        if self.timer_ is not None:
-            self.destroy_timer(self.timer_)
         return TransitionCallbackReturn.SUCCESS
 
     def on_activate(self, state: LifecycleState):
-        self.get_logger().info('on_activate')
+        self.get_logger().info(f'[{self.drone_ns}] TakeOffNode activated')
+        # Seed initial setpoint (important pre-OFFBOARD)
+        self._publish_ts(self.x, self.y, self.z)
         self.timer_.reset()
         return super().on_activate(state)
 
     def on_deactivate(self, state: LifecycleState):
-        # Persist last known position (kept as-is from your code)
+        # Persist last known position (optional)
         try:
-            with open('/home/ros2_ws/src/indoor_drone_flight/mission_cfg/cfg.json', 'r+') as file:
-                fcntl.flock(file, fcntl.LOCK_EX)
-                data = json.load(file)
-                self.get_logger().info(f'[{self.drone_ns}] Writing current_pos to cfg.json')
+            with open('/home/ros2_ws/src/indoor_drone_flight/mission_cfg/cfg.json', 'r+') as f:
+                fcntl.flock(f, fcntl.LOCK_EX)
+                try:
+                    data = json.load(f)
+                except Exception:
+                    data = {}
                 data.setdefault(self.drone_ns, {})
-                data[self.drone_ns]["current_pos"] = [self.vehicle_local_position.x,
-                                                      self.vehicle_local_position.y,
-                                                      self.vehicle_local_position.z]
-                file.seek(0)
-                json.dump(data, file, indent=4)
-                file.truncate()
+                data[self.drone_ns]["current_pos"] = [
+                    float(self.vehicle_local_position.x),
+                    float(self.vehicle_local_position.y),
+                    float(self.vehicle_local_position.z),
+                ]
+                f.seek(0)
+                json.dump(data, f, indent=4)
+                f.truncate()
         except Exception as e:
-            self.get_logger().error(f'Failed to write cfg.json: {e}')
+            self.get_logger().warn(f'[{self.drone_ns}] cfg.json write failed: {e}')
         finally:
             try:
-                fcntl.flock(file, fcntl.LOCK_UN)
+                fcntl.flock(f, fcntl.LOCK_UN)
             except Exception:
                 pass
 
         self.timer_.cancel()
         return super().on_deactivate(state)
 
-    def on_shutdown(self, state: LifecycleState):
-        self.get_logger().info('on_shutdown')
-        if self.trajectory_setpoint_publisher is not None:
-            self.destroy_publisher(self.trajectory_setpoint_publisher)
-        if self.timer_ is not None:
+    def on_cleanup(self, state: LifecycleState):
+        if self.ts_pub:
+            self.destroy_publisher(self.ts_pub)
+        if self.timer_:
             self.destroy_timer(self.timer_)
         return TransitionCallbackReturn.SUCCESS
 
-    def vehicle_status_callback(self, msg: VehicleStatus):
+    def on_shutdown(self, state: LifecycleState):
+        if self.ts_pub:
+            self.destroy_publisher(self.ts_pub)
+        if self.timer_:
+            self.destroy_timer(self.timer_)
+        return TransitionCallbackReturn.SUCCESS
+
+    def status_cb(self, msg: VehicleStatus):
         self.vehicle_status = msg
 
-    def vehicle_local_position_callback(self, msg: VehicleLocalPosition):
+    def lpos_cb(self, msg: VehicleLocalPosition):
         self.vehicle_local_position = msg
 
-    def publish_position_setpoint(self, x: float, y: float, z: float):
-        msg = TrajectorySetpoint()
-        msg.position = [x, y, z]
-        msg.yaw = 1.57079  # 90 deg
-        msg.timestamp = int(self.get_clock().now().nanoseconds / 1000)
-        self.trajectory_setpoint_publisher.publish(msg)
-
-    def vehicle_cmd_callback(self, msg: Float32MultiArray):
+    def cmd_cb(self, msg: Float32MultiArray):
         if len(msg.data) >= 3:
             self.x, self.y, self.z = float(msg.data[0]), float(msg.data[1]), float(msg.data[2])
-            self.get_logger().info(f"[{self.drone_ns}] New destination {self.x}, {self.y}, {self.z}")
+            self.get_logger().info(f'[{self.drone_ns}] New destination: {self.x:.2f}, {self.y:.2f}, {self.z:.2f}')
 
-    def timer_callback(self):
-        if self.vehicle_status.nav_state == VehicleStatus.NAVIGATION_STATE_OFFBOARD:
-            self.publish_position_setpoint(self.x, self.y, self.z)
+    def _publish_ts(self, x: float, y: float, z: float):
+        msg = TrajectorySetpoint()
+        msg.position = [float(x), float(y), float(z)]
+        msg.yaw = 1.57079  # 90 deg
+        msg.timestamp = int(self.get_clock().now().nanoseconds / 1000)
+        self.ts_pub.publish(msg)
+
+    def timer_cb(self):
+        # ALWAYS stream setpoints so PX4 will enter OFFBOARD
+        self._publish_ts(self.x, self.y, self.z)
