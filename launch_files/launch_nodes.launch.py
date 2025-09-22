@@ -1,6 +1,11 @@
 import os
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription, LogInfo, OpaqueFunction
+from launch.actions import (
+    DeclareLaunchArgument,
+    IncludeLaunchDescription,
+    LogInfo,
+    OpaqueFunction,
+)
 from launch.conditions import IfCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration
@@ -9,52 +14,66 @@ from ament_index_python.packages import get_package_share_directory
 
 
 def run_launch_arguments():
-    args = [
+    return [
         DeclareLaunchArgument(
             'auto_start', default_value='true', choices=['true', 'false'],
             description='Auto-start lifecycle nodes.'
-        )
+        ),
+        DeclareLaunchArgument(
+            'manage_bt', default_value='false', choices=['true', 'false'],
+            description='Whether to include the BT node in lifecycle management.'
+        ),
+        DeclareLaunchArgument(
+            'bt_node_name', default_value='drone_bt_navigator',
+            description='Exact node name of the BT navigator (must match ros2 node list).'
+        ),
     ]
-    return args
 
 
 def create_unified_lifecycle_manager(*node_names: str):
-    lifecycle_manager_node = Node(
+    return Node(
         package='nav2_lifecycle_manager',
         executable='lifecycle_manager',
         name='unified_lifecycle_manager',
         output='screen',
         parameters=[
             {'autostart': LaunchConfiguration('auto_start')},
-            {'node_names': list(node_names)},
-            {'bond_timeout': 0.0}
+            {'node_names': list(node_names)},   # MUST exactly match fully-qualified names
+            {'bond_timeout': 0.0},
         ],
-        condition=IfCondition(LaunchConfiguration('auto_start'))
+        condition=IfCondition(LaunchConfiguration('auto_start')),
     )
-    return lifecycle_manager_node
 
 
 def run_lifecycle_actions():
     def _setup(context, *args, **kwargs):
-        # Per-drone managed nodes
-        bt_nodes_1 = "drone_1/drone_bt_navigator"
-        fc_nodes_1 = "drone_1/flight_control_node"
+        manage_bt = LaunchConfiguration('manage_bt').perform(context).lower() == 'true'
+        bt_node_name = LaunchConfiguration('bt_node_name').perform(context)
 
-        bt_nodes_2 = "drone_2/drone_bt_navigator"
-        fc_nodes_2 = "drone_2/flight_control_node"
+        # Fully-qualified names expected by lifecycle manager
+        # Flight control node is a LifecycleNode (ok to manage)
+        fc_1 = 'drone_1/flight_control_node'
+        fc_2 = 'drone_2/flight_control_node'
 
-        log_action = LogInfo(msg=f"Lifecycle managers will manage: {[bt_nodes_1, fc_nodes_1, bt_nodes_2, fc_nodes_2]}")
+        # BT node may or may not be lifecycle; only manage if requested
+        nodes_d1 = [fc_1]
+        nodes_d2 = [fc_2]
+        if manage_bt:
+            nodes_d1.append(f'drone_1/{bt_node_name}')
+            nodes_d2.append(f'drone_2/{bt_node_name}')
 
-        manager_1 = create_unified_lifecycle_manager(bt_nodes_1, fc_nodes_1)
-        manager_2 = create_unified_lifecycle_manager(bt_nodes_2, fc_nodes_2)
+        log_action = LogInfo(msg=f"Lifecycle manager will manage: {nodes_d1 + nodes_d2}")
 
+        # One unified manager per drone (keeps bonds separate)
+        manager_1 = create_unified_lifecycle_manager(*nodes_d1)
+        manager_2 = create_unified_lifecycle_manager(*nodes_d2)
         return [log_action, manager_1, manager_2]
 
     return [OpaqueFunction(function=_setup)]
 
 
 def launcher_flightcontrol_node_manager(pkg_share_dir):
-    # Assumes your included launch reads a 'drone_ns' LaunchArg
+    # These includes should launch the flight_control_node under the given namespaces
     fc_include_1 = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(os.path.join(pkg_share_dir, 'launch_flightctrl_node.launch.py')),
         launch_arguments={'drone_ns': 'drone_1'}.items()
@@ -67,7 +86,7 @@ def launcher_flightcontrol_node_manager(pkg_share_dir):
 
 
 def launcher_bt_navigator_manager(pkg_share_dir):
-    # Assumes your included launch reads a 'drone_ns' LaunchArg
+    # These includes should launch your BT nodes (whatever their actual node name is)
     bt_include_1 = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(os.path.join(pkg_share_dir, 'launch_bt_node.launch.py')),
         launch_arguments={'drone_ns': 'drone_1'}.items()
@@ -83,17 +102,17 @@ def generate_launch_description():
     share_path_flight_control = get_package_share_directory('flight_control')
     share_path_bt_navigator = get_package_share_directory('bt_navigator')
 
+    args = run_launch_arguments()
     fc_includes = launcher_flightcontrol_node_manager(share_path_flight_control)
     bt_includes = launcher_bt_navigator_manager(share_path_bt_navigator)
-
     lifecycle_actions = run_lifecycle_actions()
-    args = run_launch_arguments()
 
     # One goal manager that publishes to both drones
     gm_node = Node(
         package="goal_manager",
         executable="goal_manager_node",
-        name="goal_manager_node"
+        name="goal_manager_node",
+        output="screen",
     )
 
     return LaunchDescription(args + fc_includes + bt_includes + lifecycle_actions + [gm_node])
