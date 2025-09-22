@@ -21,11 +21,11 @@ def run_launch_arguments():
         ),
         DeclareLaunchArgument(
             'manage_bt', default_value='false', choices=['true', 'false'],
-            description='Whether to include the BT node in lifecycle management.'
+            description='Include BT nodes in lifecycle management (only if they are LifecycleNodes).'
         ),
         DeclareLaunchArgument(
             'bt_node_name', default_value='drone_bt_navigator',
-            description='Exact node name of the BT navigator (must match ros2 node list).'
+            description='Exact BT node name (must match ros2 node list if managed).'
         ),
     ]
 
@@ -38,7 +38,7 @@ def create_unified_lifecycle_manager(*node_names: str):
         output='screen',
         parameters=[
             {'autostart': LaunchConfiguration('auto_start')},
-            {'node_names': list(node_names)},   # MUST exactly match fully-qualified names
+            {'node_names': list(node_names)},  # fully qualified names required
             {'bond_timeout': 0.0},
         ],
         condition=IfCondition(LaunchConfiguration('auto_start')),
@@ -50,21 +50,20 @@ def run_lifecycle_actions():
         manage_bt = LaunchConfiguration('manage_bt').perform(context).lower() == 'true'
         bt_node_name = LaunchConfiguration('bt_node_name').perform(context)
 
-        # Fully-qualified names expected by lifecycle manager
-        # Flight control node is a LifecycleNode (ok to manage)
+        # Flight control nodes are LifecycleNodes
         fc_1 = 'drone_1/flight_control_node'
         fc_2 = 'drone_2/flight_control_node'
 
-        # BT node may or may not be lifecycle; only manage if requested
         nodes_d1 = [fc_1]
         nodes_d2 = [fc_2]
+
+        # Only manage BT if you made it a LifecycleNode and its name matches
         if manage_bt:
             nodes_d1.append(f'drone_1/{bt_node_name}')
             nodes_d2.append(f'drone_2/{bt_node_name}')
 
         log_action = LogInfo(msg=f"Lifecycle manager will manage: {nodes_d1 + nodes_d2}")
 
-        # One unified manager per drone (keeps bonds separate)
         manager_1 = create_unified_lifecycle_manager(*nodes_d1)
         manager_2 = create_unified_lifecycle_manager(*nodes_d2)
         return [log_action, manager_1, manager_2]
@@ -73,29 +72,27 @@ def run_lifecycle_actions():
 
 
 def launcher_flightcontrol_node_manager(pkg_share_dir):
-    # These includes should launch the flight_control_node under the given namespaces
-    fc_include_1 = IncludeLaunchDescription(
+    fc_inc_1 = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(os.path.join(pkg_share_dir, 'launch_flightctrl_node.launch.py')),
         launch_arguments={'drone_ns': 'drone_1'}.items()
     )
-    fc_include_2 = IncludeLaunchDescription(
+    fc_inc_2 = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(os.path.join(pkg_share_dir, 'launch_flightctrl_node.launch.py')),
         launch_arguments={'drone_ns': 'drone_2'}.items()
     )
-    return [fc_include_1, fc_include_2]
+    return [fc_inc_1, fc_inc_2]
 
 
 def launcher_bt_navigator_manager(pkg_share_dir):
-    # These includes should launch your BT nodes (whatever their actual node name is)
-    bt_include_1 = IncludeLaunchDescription(
+    bt_inc_1 = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(os.path.join(pkg_share_dir, 'launch_bt_node.launch.py')),
         launch_arguments={'drone_ns': 'drone_1'}.items()
     )
-    bt_include_2 = IncludeLaunchDescription(
+    bt_inc_2 = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(os.path.join(pkg_share_dir, 'launch_bt_node.launch.py')),
         launch_arguments={'drone_ns': 'drone_2'}.items()
     )
-    return [bt_include_1, bt_include_2]
+    return [bt_inc_1, bt_inc_2]
 
 
 def generate_launch_description():
@@ -107,7 +104,6 @@ def generate_launch_description():
     bt_includes = launcher_bt_navigator_manager(share_path_bt_navigator)
     lifecycle_actions = run_lifecycle_actions()
 
-    # One goal manager that publishes to both drones
     gm_node = Node(
         package="goal_manager",
         executable="goal_manager_node",
