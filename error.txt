@@ -1,0 +1,49 @@
+[takeoff_node-3] 2025-09-22 08:45:54.428 [RTPS_TRANSPORT_SHM Error] Failed init_port fastrtps_port7413: open_and_lock_file failed -> Function open_port_internal
+[takeoff_node-8] 2025-09-22 08:45:54.504 [RTPS_TRANSPORT_SHM Error] Failed init_port fastrtps_port7411: open_and_lock_file failed -> Function open_port_internal
+[takeoff_node-8] 2025-09-22 08:45:54.508 [RTPS_TRANSPORT_SHM Error] Failed init_port fastrtps_port7413: open_and_lock_file failed -> Function open_port_internal
+[arming_node-2] 2025-09-22 08:45:54.537 [RTPS_TRANSPORT_SHM Error] Failed init_port fastrtps_port7411: open_and_lock_file failed -> Function open_port_internal
+[arming_node-2] 2025-09-22 08:45:54.537 [RTPS_TRANSPORT_SHM Error] Failed init_port fastrtps_port7413: open_and_lock_file failed -> Function open_port_internal
+[landing_node-4] 2025-09-22 08:45:54.564 [RTPS_TRANSPORT_SHM Error] Failed init_port fastrtps_port7411: open_and_lock_file failed -> Function open_port_internal
+[landing_node-4] 2025-09-22 08:45:54.564 [RTPS_TRANSPORT_SHM Error] Failed init_port fastrtps_port7413: open_and_lock_file failed -> Function open_port_internal
+[arming_node-7] 2025-09-22 08:45:54.658 [RTPS_TRANSPORT_SHM Error] Failed init_port fastrtps_port7411: open_and_lock_file failed -> Function open_port_internal
+[arming_node-7] 2025-09-22 08:45:54.658 [RTPS_TRANSPORT_SHM Error] Failed init_port fastrtps_port7413: open_and_lock_file failed -> Function open_port_internal
+[hb_node-6] 2025-09-22 08:45:54.659 [RTPS_TRANSPORT_SHM Error] Failed init_port fastrtps_port7411: open_and_lock_file failed -> Function open_port_internal
+[hb_node-6] 2025-09-22 08:45:54.659 [RTPS_TRANSPORT_SHM Error] Failed init_port fastrtps_port7413: open_and_lock_file failed -> Function open_port_internal
+[landing_node-9] 2025-09-22 08:45:54.696 [RTPS_TRANSPORT_SHM Error] Failed init_port fastrtps_port7411: open_and_lock_file failed -> Function open_port_internal
+[landing_node-9] 2025-09-22 08:45:54.696 [RTPS_TRANSPORT_SHM Error] Failed init_port fastrtps_port7413: open_and_lock_file failed -> Function open_port_internal
+[hb_node-1] [INFO] [1758530754.699066901] [drone_1.hb_node]: [drone_1] HeartBeatNode init for PX4 ns: px4_1
+[takeoff_node-3] [INFO] [1758530754.718988472] [drone_1.takeoff_node]: [drone_1] TakeOffNode init for PX4 ns: px4_1
+[landing_node-4] [INFO] [1758530754.835140453] [drone_1.landing_node]: [drone_1] LandingNode init for PX4 ns: px4_1
+[lifecycle_manager-5] [INFO] [1758530754.847491072] [drone_1_lifecycle_manager]: Starting managed nodes bringup...
+[lifecycle_manager-5] [INFO] [1758530754.847549189] [drone_1_lifecycle_manager]: Configuring /drone_1/hb_node
+[takeoff_node-8] [INFO] [1758530754.853414193] [drone_2.takeoff_node]: [drone_2] TakeOffNode init for PX4 ns: px4_2
+[arming_node-2] [INFO] [1758530754.856355270] [drone_1.arming_node]: [drone_1] ArmingNode init for PX4 ns: px4_1
+[lifecycle_manager-5] [INFO] [1758530754.868508244] [drone_1_lifecycle_manager]: Configuring /drone_1/arming_node
+[lifecycle_manager-5] [INFO] [1758530754.882644920] [drone_1_lifecycle_manager]: Configuring /drone_1/takeoff_node
+[hb_node-6] [INFO] [1758530754.921114835] [drone_2.hb_node]: [drone_2] HeartBeatNode init for PX4 ns: px4_2
+[lifecycle_manager-5] [INFO] [1758530754.931034091] [drone_1_lifecycle_manager]: Configuring /drone_1/landing_node
+[arming_node-7] [INFO] [1758530754.971020255] [drone_2.arming_node]: [drone_2] ArmingNode init for PX4 ns: px4_2
+[lifecycle_manager-5] [INFO] [1758530754.976634309] [drone_1_lifecycle_manager]: Activating /drone_1/hb_node
+[hb_node-1] [INFO] [1758530754.987489785] [drone_1.hb_node]: [drone_1] HeartBeatNode activated
+[lifecycle_manager-10] [INFO] [1758530754.990405258] [drone_2_lifecycle_manager]: Starting managed nodes bringup...
+[lifecycle_manager-10] [INFO] [1758530754.990466402] [drone_2_lifecycle_manager]: Configuring /drone_2/hb_node
+[lifecycle_manager-5] [INFO] [1758530754.992537692] [drone_1_lifecycle_manager]: Activating /drone_1/arming_node
+[arming_node-2] [INFO] [1758530754.994143942] [drone_1.arming_node]: [drone_1] ArmingNode activated
+[lifecycle_manager-10] [INFO] [1758530755.000194107] [drone_2_lifecycle_manager]: Configuring /drone_2/arming_node
+[lifecycle_manager-5] [INFO] [1758530755.000931213] [drone_1_lifecycle_manager]: Activating /drone_1/takeoff_node
+[takeoff_node-3] [INFO] [1758530755.002484693] [drone_1.takeoff_node]: [drone_1] TakeOffNode activated
+[lifecycle_manager-5] [INFO] [1758530755.004005688] [drone_1_lifecycle_manager]: Activating /drone_1/landing_node
+[landing_node-4] [INFO] [1758530755.006208826] [drone_1.landing_node]: [drone_1] LandingNode activated
+[lifecycle_manager-5] [INFO] [1758530755.009526431] [drone_1_lifecycle_manager]: Managed nodes are active
+[lifecycle_manager-10] [INFO] [1758530755.012819973] [drone_2_lifecycle_manager]: Configuring /drone_2/takeoff_node
+[landing_node-9] [INFO] [1758530755.027442624] [drone_2.landing_node]: [drone_2] LandingNode init for PX4 ns: px4_2
+[lifecycle_manager-10] [INFO] [1758530755.029421237] [drone_2_lifecycle_manager]: Configuring /drone_2/landing_node
+[lifecycle_manager-10] [INFO] [1758530755.037311398] [drone_2_lifecycle_manager]: Activating /drone_2/hb_node
+[hb_node-6] [INFO] [1758530755.038201788] [drone_2.hb_node]: [drone_2] HeartBeatNode activated
+[lifecycle_manager-10] [INFO] [1758530755.038731533] [drone_2_lifecycle_manager]: Activating /drone_2/arming_node
+[arming_node-7] [INFO] [1758530755.039946180] [drone_2.arming_node]: [drone_2] ArmingNode activated
+[lifecycle_manager-10] [INFO] [1758530755.040632948] [drone_2_lifecycle_manager]: Activating /drone_2/takeoff_node
+[takeoff_node-8] [INFO] [1758530755.041679609] [drone_2.takeoff_node]: [drone_2] TakeOffNode activated
+[lifecycle_manager-10] [INFO] [1758530755.042321714] [drone_2_lifecycle_manager]: Activating /drone_2/landing_node
+[landing_node-9] [INFO] [1758530755.043476822] [drone_2.landing_node]: [drone_2] LandingNode activated
+[lifecycle_manager-10] [INFO] [1758530755.044217275] [drone_2_lifecycle_manager]: Managed nodes are active
